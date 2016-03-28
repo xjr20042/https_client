@@ -30,6 +30,7 @@ typedef struct
     char    referrer[H_FIELD_SIZE];
     long    content_length;
     int     chunked;
+    int     close;
 
     int     https;
     char    host[256];
@@ -207,7 +208,13 @@ static int http_header(HTTP_INFO *hi, char *param)
             hi->chunked = 1;
         }
     }
-
+    else if(strncasecmp(t1, "connection:", 11) == 0)
+    {
+        if(strncasecmp(t2, "close", 5) == 0)
+        {
+            hi->close = 1;
+        }
+    }
 
     return 1;
 }
@@ -234,6 +241,8 @@ static int http_parse(HTTP_INFO *hi)
 
                 if(len > 0)
                 {
+//                    printf("header: %s(%ld)\n", p1, len);
+
                     http_header(hi, p1);
                     p1 = p2 + 2;    // skip CR+LF
                 }
@@ -311,8 +320,9 @@ static int http_parse(HTTP_INFO *hi)
         {
             if(hi->chunked == 1 && hi->length == -1)
             {
-                len = hi->r_len - (p1 - hi->r_buf);
+//              printf("parse chunked size. \n");
 
+                len = hi->r_len - (p1 - hi->r_buf);
                 if(len > 0)
                 {
                     if ((p2 = strstr(p1, "\r\n")) != NULL)
@@ -383,7 +393,7 @@ static int http_parse(HTTP_INFO *hi)
                         }
                         else
                         {
-                            // parse error ...
+//                            printf("parse error  ... \n");
                             return -1;
                         }
                     }
@@ -445,6 +455,8 @@ static int https_init(HTTP_INFO *hi, int https)
 
     hi->https = https;
 
+//  printf("https_init ... \n");
+
     return 0;
 }
 
@@ -466,6 +478,8 @@ static int https_close(HTTP_INFO *hi)
         mbedtls_ctr_drbg_free(&hi->ctr_drbg);
         mbedtls_entropy_free(&hi->entropy);
     }
+
+//  printf("https_close ... \n");
 
     return 0;
 }
@@ -789,10 +803,13 @@ int http_get(int id, char *url, char *response, int size)
         return -1;
     }
 
+//  printf("request: %s \r\n\r\n", request);
+
     hi->status = 0;
     hi->r_len = 0;
     hi->header_end = 0;
     hi->content_length = 0;
+    hi->close = 0;
 
     hi->body = response;
     hi->body_size = size;
@@ -821,13 +838,33 @@ int http_get(int id, char *url, char *response, int size)
         hi->r_len += ret;
         hi->r_buf[hi->r_len] = 0;
 
+//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
+//        printf("read(%ld) ... \n", hi->r_len);
+
         if(http_parse(hi) != 0) break;
     }
 
-    strncpy(hi->host, host, strlen(host));
-    strncpy(hi->port, port, strlen(port));
+    if(hi->close == 1)
+    {
+        https_close(hi);
+    }
+    else
+    {
+        strncpy(hi->host, host, strlen(host));
+        strncpy(hi->port, port, strlen(port));
+    }
+
+/*
+    printf("status: %d \n", hi->status);
+    printf("cookie: %s \n", hi->cookie);
+    printf("location: %s \n", hi->location);
+    printf("referrer: %s \n", hi->referrer);
+    printf("length: %ld \n", hi->content_length);
+    printf("body: %ld \n", hi->body_len);
+*/
 
     return hi->status;
+
 }
 
 /*---------------------------------------------------------------------*/
@@ -885,6 +922,8 @@ int http_post(int id, char *url, char *data, char *response, int size)
                 return -1;
             }
         }
+//      else
+//          printf("socket reuse: %d \n", sock_fd);
     }
 
     /* Send HTTP request. */
@@ -910,10 +949,13 @@ int http_post(int id, char *url, char *data, char *response, int size)
         return -1;
     }
 
+//  printf("request: %s \r\n\r\n", request);
+
     hi->status = 0;
     hi->r_len = 0;
     hi->header_end = 0;
     hi->content_length = 0;
+    hi->close = 0;
 
     hi->body = response;
     hi->body_size = size;
@@ -944,13 +986,33 @@ int http_post(int id, char *url, char *data, char *response, int size)
         hi->r_len += ret;
         hi->r_buf[hi->r_len] = 0;
 
+//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
+//        printf("read(%ld) \n", hi->r_len);
+
         if(http_parse(hi) != 0) break;
     }
 
-    strncpy(hi->host, host, strlen(host));
-    strncpy(hi->port, port, strlen(port));
+    if(hi->close == 1)
+    {
+        https_close(hi);
+    }
+    else
+    {
+        strncpy(hi->host, host, strlen(host));
+        strncpy(hi->port, port, strlen(port));
+    }
+
+/*
+    printf("status: %d \n", hi->status);
+    printf("cookie: %s \n", hi->cookie);
+    printf("location: %s \n", hi->location);
+    printf("referrer: %s \n", hi->referrer);
+    printf("length: %d \n", hi->content_length);
+    printf("body: %d \n", hi->body_len);
+*/
 
     return hi->status;
+
 }
 
 
