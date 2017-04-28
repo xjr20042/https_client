@@ -9,7 +9,7 @@
 
 char *strtoken(char *src, char *dst, int size);
 
-int  http_init(int id);
+int  http_init(int id, int verify);
 int  http_close(int id);
 int  http_get(int id, char *url, char *response, int size);
 int  http_post(int id, char *url, char *data, char *response, int size);

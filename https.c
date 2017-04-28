@@ -17,6 +17,8 @@
 #include "mbedtls/error.h"
 #include "mbedtls/certs.h"
 
+#include "ca_cert.h"
+
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
 #define H_READ_SIZE     2048
@@ -32,6 +34,7 @@ typedef struct
     int     chunked;
     int     close;
 
+    int     verify;
     int     https;
     char    host[256];
     char    port[10];
@@ -64,13 +67,13 @@ static int parse_url(char *src_url, int *https, char *host, char *port, char *ur
 static int http_header(HTTP_INFO *hi, char *param);
 static int http_parse(HTTP_INFO *hi);
 
-static int https_init(HTTP_INFO *hi, int https);
+static int https_init(HTTP_INFO *hi, int https, int verify);
 static int https_close(HTTP_INFO *hi);
 static int https_connect(HTTP_INFO *hi, char *host, char *port);
 static int https_write(HTTP_INFO *hi, char *buffer, int len);
 static int https_read(HTTP_INFO *hi, char *buffer, int len);
 
-int http_init(int id);
+int http_init(int id, int verify);
 int http_close(int id);
 
 int http_get(int id, char *url, char *response, int size);
@@ -452,7 +455,7 @@ static int http_parse(HTTP_INFO *hi)
 }
 
 /*---------------------------------------------------------------------*/
-static int https_init(HTTP_INFO *hi, int https)
+static int https_init(HTTP_INFO *hi, int https, int verify)
 {
     memset(hi, 0, sizeof(HTTP_INFO));
 
@@ -466,6 +469,7 @@ static int https_init(HTTP_INFO *hi, int https)
 
     mbedtls_net_init(&hi->ssl_fd);
 
+    hi->verify = verify;
     hi->https = https;
 
 //  printf("https_init ... \n");
@@ -625,9 +629,9 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port)
             return ret;
         }
 
-        ret = mbedtls_x509_crt_parse( &hi->cacert, (const u_char *) mbedtls_test_cas_pem,
-                                      mbedtls_test_cas_pem_len );
-        if( ret < 0 )
+        ca_crt_rsa[ca_crt_rsa_size - 1] = 0;
+        ret = mbedtls_x509_crt_parse(&hi->cacert, (uint8_t *)ca_crt_rsa, ca_crt_rsa_size);
+        if( ret != 0 )
         {
             return ret;
         }
@@ -678,6 +682,12 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port)
                 return ret;
             }
         }
+
+        /* In real life, we probably want to bail out when ret != 0 */
+        if( hi->verify && (mbedtls_ssl_get_verify_result(&hi->ssl) != 0) )
+        {
+            return MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+        }
     }
 
     return 0;
@@ -720,14 +730,14 @@ static int https_read(HTTP_INFO *hi, char *buffer, int len)
 }
 
 /*---------------------------------------------------------------------*/
-int http_init(int id)
+int http_init(int id, int verify)
 {
     HTTP_INFO *hi;
 
     if(id >= CLIENT_MAX) return -1;
     hi = &http_info[id];
 
-    return https_init(hi, 0);
+    return https_init(hi, 0, verify);
 }
 
 /*---------------------------------------------------------------------*/
@@ -747,12 +757,15 @@ int http_get(int id, char *url, char *response, int size)
     HTTP_INFO   *hi;
     char        request[1024], err[100];
     char        host[256], port[10], dir[1024];
-    int         sock_fd, https, ret, opt, len;
+    int         sock_fd, https, verify;
+    int         ret, opt, len;
     socklen_t   slen;
 
 
     if(id > 1) return -1;
     hi = &http_info[id];
+
+    verify = hi->verify;
 
     parse_url(url, &https, host, port, dir);
 
@@ -761,7 +774,7 @@ int http_get(int id, char *url, char *response, int size)
     {
         https_close(hi);
 
-        https_init(hi, https);
+        https_init(hi, https, verify);
 
         if((ret=https_connect(hi, host, port)) < 0)
         {
@@ -782,7 +795,7 @@ int http_get(int id, char *url, char *response, int size)
         {
             https_close(hi);
 
-            https_init(hi, https);
+            https_init(hi, https, verify);
 
             if((ret=https_connect(hi, host, port)) < 0)
             {
@@ -886,7 +899,8 @@ int http_post(int id, char *url, char *data, char *response, int size)
     HTTP_INFO   *hi;
     char        request[1024], err[100];
     char        host[256], port[10], dir[1024];
-    int         sock_fd, https, ret, opt, len;
+    int         sock_fd, https, verify;
+    int         ret, opt, len;
     socklen_t   slen;
 
 
@@ -901,7 +915,7 @@ int http_post(int id, char *url, char *data, char *response, int size)
         if(hi->ssl_fd.fd != -1)
             https_close(hi);
 
-        https_init(hi, https);
+        https_init(hi, https, verify);
 
         if((ret=https_connect(hi, host, port)) < 0)
         {
@@ -923,7 +937,7 @@ int http_post(int id, char *url, char *data, char *response, int size)
         {
             https_close(hi);
 
-            https_init(hi, https);
+            https_init(hi, https, verify);
 
             if((ret=https_connect(hi, host, port)) < 0)
             {
@@ -1037,11 +1051,12 @@ void http_strerror(char *buf, int len)
 /*---------------------------------------------------------------------*/
 int http_open_chunked(int id, char *url)
 {
-    HTTP_INFO *hi;
-    char request[1024];
-    char host[256], port[10], dir[1024];
-    int sock_fd, https, ret, opt, len;
-    socklen_t slen;
+    HTTP_INFO   *hi;
+    char        request[1024];
+    char        host[256], port[10], dir[1024];
+    int         sock_fd, https, verify;
+    int         ret, opt, len;
+    socklen_t   slen;
 
 
     if (id > 1) return -1;
@@ -1055,7 +1070,7 @@ int http_open_chunked(int id, char *url)
         if (hi->ssl_fd.fd != -1)
             https_close(hi);
 
-        https_init(hi, https);
+        https_init(hi, https, verify);
 
         if ((ret = https_connect(hi, host, port)) < 0)
         {
@@ -1076,7 +1091,7 @@ int http_open_chunked(int id, char *url)
         {
             https_close(hi);
 
-            https_init(hi, https);
+            https_init(hi, https, verify);
 
             if ((ret = https_connect(hi, host, port)) < 0)
             {

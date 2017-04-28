@@ -2,6 +2,9 @@
 #include <string.h>
 #include "https.h"
 
+#define TRUE    1
+#define FALSE   0
+
 
 int main(int argc, char *argv[])
 {
@@ -9,9 +12,9 @@ int main(int argc, char *argv[])
     char data[1024], response[4096];
     int  i, ret, size;
 
-
-    http_init(0);
-    http_init(1);
+    // Init http session. verify: check the server CA cert.
+    http_init(0, TRUE);
+    http_init(1, TRUE);
 
     // Test a http get method.
     url = "http://httpbin.org/get?message=https_client";
