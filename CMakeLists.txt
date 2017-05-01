@@ -10,11 +10,13 @@ set(SOURCE_FILES
 
 include_directories(.)
 include_directories(include)
-include_directories(${CMAKE_SOURCE_DIR}/../mbedtls-2.2.1/include)
+include_directories(${CMAKE_SOURCE_DIR}/mbedtls/include)
+
+add_subdirectory(mbedtls)
 
 add_executable(https_client ${SOURCE_FILES})
 
-target_link_libraries(https_client ${CMAKE_SOURCE_DIR}/../mbedtls-2.2.1/library/libmbedx509.a)
-target_link_libraries(https_client ${CMAKE_SOURCE_DIR}/../mbedtls-2.2.1/library/libmbedtls.a)
-target_link_libraries(https_client ${CMAKE_SOURCE_DIR}/../mbedtls-2.2.1/library/libmbedcrypto.a)
+target_link_libraries(https_client mbedx509)
+target_link_libraries(https_client mbedtls)
+target_link_libraries(https_client mbedcrypto)
 target_link_libraries(https_client pthread)
