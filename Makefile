@@ -32,13 +32,13 @@ mbedtls_make:
 https_client: mbedtls_make $(OBJS)
 	@echo Linking: $@ ....
 	$(CC) -o $@ $(OBJS) $(LDFLAGS) $(LIBS)
-	$(STRIP) -s $@
+#	$(STRIP) -s $@
 
 .c.o:
 	@echo Compiling: $< ....
 	$(CC) -c $(CFLAGS) $(INCLUDES) -o $@ $<
 
-clean: mbedtls_clean
+clean:
 	rm -f https_client *.o
 
 mbedtls_clean:

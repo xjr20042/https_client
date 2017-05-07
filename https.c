@@ -38,6 +38,7 @@ typedef struct
     int     https;
     char    host[256];
     char    port[10];
+    char    path[H_FIELD_SIZE];
 
     long    length;
     char    r_buf[H_READ_SIZE];
@@ -878,6 +879,7 @@ int http_get(int id, char *url, char *response, int size)
     {
         strncpy(hi->host, host, strlen(host));
         strncpy(hi->port, port, strlen(port));
+        strncpy(hi->path, dir, strlen(dir));
     }
 
     /*
@@ -906,6 +908,8 @@ int http_post(int id, char *url, char *data, char *response, int size)
 
     if(id > 1) return -1;
     hi = &http_info[id];
+
+    verify = hi->verify;
 
     parse_url(url, &https, host, port, dir);
 
@@ -958,12 +962,16 @@ int http_post(int id, char *url, char *data, char *response, int size)
             "POST %s HTTP/1.1\r\n"
             "User-Agent: Mozilla/4.0\r\n"
             "Host: %s:%s\r\n"
+            "Connection: Keep-Alive\r\n"
+            "Accept: */*\r\n"
             "Content-Type: application/json; charset=utf-8\r\n"
             "Content-Length: %d\r\n"
-            "Connection: Keep-Alive\r\n"
             "%s\r\n"
             "%s",
-            dir, host, port, (int)strlen(data), hi->cookie, data);
+            dir, host, port,
+            (int)strlen(data),
+            hi->cookie,
+            data);
 
     if((ret = https_write(hi, request, len)) != len)
     {
@@ -1027,6 +1035,7 @@ int http_post(int id, char *url, char *data, char *response, int size)
     {
         strncpy(hi->host, host, strlen(host));
         strncpy(hi->port, port, strlen(port));
+        strncpy(hi->path, dir, strlen(dir));
     }
 
 /*
@@ -1052,7 +1061,6 @@ void http_strerror(char *buf, int len)
 int http_open_chunked(int id, char *url)
 {
     HTTP_INFO   *hi;
-    char        request[1024];
     char        host[256], port[10], dir[1024];
     int         sock_fd, https, verify;
     int         ret, opt, len;
@@ -1061,6 +1069,8 @@ int http_open_chunked(int id, char *url)
 
     if (id > 1) return -1;
     hi = &http_info[id];
+
+    verify = hi->verify;
 
     parse_url(url, &https, host, port, dir);
 
@@ -1106,16 +1116,35 @@ int http_open_chunked(int id, char *url)
 //          printf("socket reuse: %d \n", sock_fd);
     }
 
+    strncpy(hi->host, host, strlen(host));
+    strncpy(hi->port, port, strlen(port));
+    strncpy(hi->path, dir, strlen(dir));
+
+    return 0;
+}
+
+/*---------------------------------------------------------------------*/
+int http_write_header(int id, char *header)
+{
+    HTTP_INFO   *hi;
+    char        request[1024];
+    int         ret, len;
+
+
+    if (id > 1) return -1;
+    hi = &http_info[id];
+
     /* Send HTTP request. */
     len = snprintf(request, 1024,
-                   "POST %s HTTP/1.1\r\n"
-                           "User-Agent: Mozilla/4.0\r\n"
-                           "Host: %s:%s\r\n"
-                           "Content-Type: application/json; charset=utf-8\r\n"
-                           "Transfer-Encoding: chunked\r\n"
-                           "Connection: Keep-Alive\r\n"
-                           "%s\r\n",
-                   dir, host, port, hi->cookie);
+                       "POST %s HTTP/1.1\r\n"
+                       "User-Agent: Mozilla/4.0\r\n"
+                       "Host: %s:%s\r\n"
+//                       "Content-Type: application/json; charset=utf-8\r\n"
+                       "Transfer-Encoding: chunked\r\n"
+                       "Connection: Keep-Alive\r\n"
+                       "%s\r\n"
+                       "%s\r\n",
+                   hi->path, hi->host, hi->port, header, hi->cookie);
 
     if ((ret = https_write(hi, request, len)) != len)
     {
@@ -1126,18 +1155,15 @@ int http_open_chunked(int id, char *url)
         return -1;
     }
 
-    strncpy(hi->host, host, strlen(host));
-    strncpy(hi->port, port, strlen(port));
-
     return 0;
 }
 
 /*---------------------------------------------------------------------*/
 int http_write_chunked(int id, char *data, int len)
 {
-    HTTP_INFO *hi;
-    char str[10];
-    int ret, l;
+    HTTP_INFO   *hi;
+    char        str[10];
+    int         ret, l;
 
 
     if (id > 1) return -1;
@@ -1153,7 +1179,7 @@ int http_write_chunked(int id, char *data, int len)
         return -1;
     }
 
-    if ((ret = https_write(hi, data, len)) != len)
+    if ((len > 0) && ((ret = https_write(hi, data, len)) != len))
     {
         https_close(hi);
         _error = ret;
@@ -1181,14 +1207,6 @@ int http_read_chunked(int id, char *response, int size)
 
     if (id > 1) return -1;
     hi = &http_info[id];
-
-    if ((ret = https_write(hi, "0\r\n\r\n", 5)) != 5)
-    {
-        https_close(hi);
-        _error = ret;
-
-        return -1;
-    }
 
 //  printf("request: %s \r\n\r\n", request);
 
