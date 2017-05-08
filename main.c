@@ -34,42 +34,54 @@ int main(int argc, char *argv[])
 
     url = "https://localhost:8080/upload";
 
-    if(http_open_chunked(0, url) == 0)
+    if(http_open_chunked(0, url) < 0)
     {
-        sprintf(data, "Content-Type: multipart/form-data; boundary=1234567890abcdef");
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
 
-        if (http_write_header(0, data) < 0)
-        {
-            http_strerror(data, 1024);
-            printf("socket error: %s \n", data);
-
-            goto error;
-        }
-
-        size = sprintf(data,
-                       "--1234567890abcdef\r\n"
-                       "Content-Disposition: form-data; name=\"upload\"; filename=\"test.txt\"\r\n"
-                       "Content-Type: text/plain\r\n\r\n"
-                       "test message\r\n"
-                       "--1234567890abcdef--\r\n"
-                       );
-
-        if (http_write_chunked(0, data, size) != size)
-        {
-            http_strerror(data, 1024);
-            printf("socket error: %s \n", data);
-
-            goto error;
-        }
-
-        http_write_chunked(0, NULL, 0);
-
-        ret = http_read_chunked(0, response, sizeof(response));
-
-        printf("return code: %d \n", ret);
-        printf("return body: %s \n", response);
-
+        goto error;
     }
+
+    sprintf(data, "Content-Type: multipart/form-data; boundary=1234567890abcdef");
+
+    if(http_write_header(0, data) < 0)
+    {
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
+
+        goto error;
+    }
+
+    size = sprintf(data,
+                   "--1234567890abcdef\r\n"
+                   "Content-Disposition: form-data; name=\"upload\"; filename=\"test.txt\"\r\n"
+                   "Content-Type: text/plain\r\n\r\n"
+                   "test message\r\n"
+                   "--1234567890abcdef--\r\n"
+                   );
+
+    if(http_write_chunked(0, data, size) != size)
+    {
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
+
+        goto error;
+    }
+
+    // Write end-chunked
+    if(http_write_chunked(0, NULL, 0) < 0)
+    {
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
+
+        goto error;
+    }
+
+    ret = http_read_chunked(0, response, sizeof(response));
+
+    printf("return code: %d \n", ret);
+    printf("return body: %s \n", response);
+
 
 /*
     // Test a http get method.
