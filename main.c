@@ -44,16 +44,8 @@ int main(int argc, char *argv[])
 
     snprintf(hi1.request.method, 8, "POST");
     hi1.request.close = FALSE;
-    hi1.request.chunked = TRUE;
+    hi1.request.chunked = FALSE;
     snprintf(hi1.request.content_type, 256, "multipart/form-data; boundary=1234567890abcdef");
-
-    if(http_write_header(&hi1) < 0)
-    {
-        http_strerror(data, 1024);
-        printf("socket error: %s \n", data);
-
-        goto error;
-    }
 
     size = sprintf(data,
                    "--1234567890abcdef\r\n"
@@ -63,7 +55,17 @@ int main(int argc, char *argv[])
                    "--1234567890abcdef--\r\n"
                    );
 
-    if(http_write_chunked(&hi1, data, size) != size)
+    hi1.request.content_length = size;
+
+    if(http_write_header(&hi1) < 0)
+    {
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
+
+        goto error;
+    }
+
+    if(http_write(&hi1, data, size) != size)
     {
         http_strerror(data, 1024);
         printf("socket error: %s \n", data);
@@ -72,7 +74,7 @@ int main(int argc, char *argv[])
     }
 
     // Write end-chunked
-    if(http_write_chunked(&hi1, NULL, 0) < 0)
+    if(http_write_end(&hi1) < 0)
     {
         http_strerror(data, 1024);
         printf("socket error: %s \n", data);

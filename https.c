@@ -30,18 +30,6 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port);
 static int https_write(HTTP_INFO *hi, char *buffer, int len);
 static int https_read(HTTP_INFO *hi, char *buffer, int len);
 
-int http_init(HTTP_INFO *hi, BOOL verify);
-int http_close(HTTP_INFO *hi);
-
-int http_get(HTTP_INFO *hi, char *url, char *response, int size);
-int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size);
-
-void http_strerror(char *buf, int len);
-int http_open_chunked(HTTP_INFO *hi, char *url);
-int http_write_chunked(HTTP_INFO *hi, char *data, int len);
-int http_read_chunked(HTTP_INFO *hi, char *response, int size);
-
-
 /*---------------------------------------------------------------------------*/
 char *strtoken(char *src, char *dst, int size)
 {
@@ -155,7 +143,7 @@ static int http_header(HTTP_INFO *hi, char *param)
     }
     else if(strncasecmp(t1, "set-cookie:", 11) == 0)
     {
-        snprintf(hi->response.cookie, 512, "Cookie: %s\r\n", t2);
+        snprintf(hi->response.cookie, 512, "%s", t2);
     }
     else if(strncasecmp(t1, "location:", 9) == 0)
     {
@@ -1137,33 +1125,67 @@ int http_write_header(HTTP_INFO *hi)
 }
 
 /*---------------------------------------------------------------------*/
-int http_write_chunked(HTTP_INFO *hi, char *data, int len)
+int http_write(HTTP_INFO *hi, char *data, int len)
 {
     char        str[10];
     int         ret, l;
 
 
+    if(NULL == hi || len <= 0) return -1;
+
+    if(hi->request.chunked == TRUE)
+    {
+        l = snprintf(str, 10, "%x\r\n", len);
+
+        if ((ret = https_write(hi, str, l)) != l)
+        {
+            https_close(hi);
+            _error = ret;
+
+            return -1;
+        }
+    }
+
+    if((ret = https_write(hi, data, len)) != len)
+    {
+        https_close(hi);
+        _error = ret;
+
+        return -1;
+    }
+
+    if(hi->request.chunked == TRUE)
+    {
+        if ((ret = https_write(hi, "\r\n", 2)) != 2)
+        {
+            https_close(hi);
+            _error = ret;
+
+            return -1;
+        }
+    }
+
+    return len;
+}
+
+/*---------------------------------------------------------------------*/
+int http_write_end(HTTP_INFO *hi)
+{
+    char        str[10];
+    int         ret, len;
+
     if (NULL == hi) return -1;
 
-    l = snprintf(str, 10, "%x\r\n", len);
-
-    if ((ret = https_write(hi, str, l)) != l)
+    if(hi->request.chunked == TRUE)
     {
-        https_close(hi);
-        _error = ret;
-
-        return -1;
+        len = snprintf(str, 10, "0\r\n\r\n");
+    }
+    else
+    {
+        len = snprintf(str, 10, "\r\n\r\n");
     }
 
-    if ((len > 0) && ((ret = https_write(hi, data, len)) != len))
-    {
-        https_close(hi);
-        _error = ret;
-
-        return -1;
-    }
-
-    if ((ret = https_write(hi, "\r\n", 2)) != 2)
+    if ((ret = https_write(hi, str, len)) != len)
     {
         https_close(hi);
         _error = ret;
