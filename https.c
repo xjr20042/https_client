@@ -143,13 +143,21 @@ static int http_header(HTTP_INFO *hi, char *param)
     }
     else if(strncasecmp(t1, "set-cookie:", 11) == 0)
     {
-        snprintf(hi->response.cookie, 512, "%s", t2);
+        len = (int)strlen(t2);
+        strncpy(hi->response.cookie, t2, len);
+        hi->response.cookie[len] = 0;
     }
     else if(strncasecmp(t1, "location:", 9) == 0)
     {
         len = (int)strlen(t2);
         strncpy(hi->response.location, t2, len);
         hi->response.location[len] = 0;
+    }
+    else if(strncasecmp(t1, "content-type:", 13) == 0)
+    {
+        len = (int)strlen(t2);
+        strncpy(hi->response.content_type, t2, len);
+        hi->response.content_type[len] = 0;
     }
     else if(strncasecmp(t1, "content-length:", 15) == 0)
     {
@@ -195,7 +203,7 @@ static int http_parse(HTTP_INFO *hi)
 
                 if(len > 0)
                 {
-                    // printf("header: %s(%ld)\n", p1, len);
+                    printf("header: %s(%ld)\n", p1, len);
 
                     http_header(hi, p1);
                     p1 = p2 + 2;    // skip CR+LF
@@ -427,18 +435,18 @@ static int https_close(HTTP_INFO *hi)
 {
     if(hi->url.https == 1)
     {
-        mbedtls_ssl_close_notify(&hi->tls.ssl);
+        mbedtls_ssl_close_notify( &hi->tls.ssl );
     }
 
     mbedtls_net_free( &hi->tls.ssl_fd );
 
     if(hi->url.https == 1)
     {
-        mbedtls_x509_crt_free(&hi->tls.cacert);
-        mbedtls_ssl_free(&hi->tls.ssl);
-        mbedtls_ssl_config_free(&hi->tls.conf);
-        mbedtls_ctr_drbg_free(&hi->tls.ctr_drbg);
-        mbedtls_entropy_free(&hi->tls.entropy);
+        mbedtls_x509_crt_free( &hi->tls.cacert );
+        mbedtls_ssl_free( &hi->tls.ssl );
+        mbedtls_ssl_config_free( &hi->tls.conf );
+        mbedtls_ctr_drbg_free( &hi->tls.ctr_drbg );
+        mbedtls_entropy_free( &hi->tls.entropy );
     }
 
 //  printf("https_close ... \n");
@@ -460,7 +468,8 @@ static int mbedtls_net_connect_timeout( mbedtls_net_context *ctx, const char *ho
     signal( SIGPIPE, SIG_IGN );
 
     /* Do name resolution with both IPv6 and IPv4 */
-    memset( &hints, 0, sizeof( hints ) );
+    memset( &hints, 0, sizeof(hints) );
+
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
     hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
@@ -610,7 +619,7 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port)
         }
     }
 
-    ret = mbedtls_net_connect_timeout(&hi->tls.ssl_fd, host, port, MBEDTLS_NET_PROTO_TCP, 5000);
+    ret = mbedtls_net_connect_timeout( &hi->tls.ssl_fd, host, port, MBEDTLS_NET_PROTO_TCP, 5000 );
     if( ret != 0 )
     {
         return ret;
@@ -618,9 +627,10 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port)
 
     if(https == 1)
     {
-        mbedtls_ssl_set_bio(&hi->tls.ssl, &hi->tls.ssl_fd, mbedtls_net_send, mbedtls_net_recv, mbedtls_net_recv_timeout);
+        mbedtls_ssl_set_bio( &hi->tls.ssl, &hi->tls.ssl_fd,
+                            mbedtls_net_send, mbedtls_net_recv, mbedtls_net_recv_timeout );
 
-        while ((ret = mbedtls_ssl_handshake(&hi->tls.ssl)) != 0)
+        while ( (ret = mbedtls_ssl_handshake(&hi->tls.ssl)) != 0 )
         {
             if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE)
             {
@@ -1197,6 +1207,49 @@ int http_write_end(HTTP_INFO *hi)
 }
 
 /*---------------------------------------------------------------------*/
+int  http_read_hader(HTTP_INFO *hi)
+{
+    int ret;
+
+
+    if (NULL == hi) return -1;
+
+    memset(hi->response, 0, sizeof(HTTP_HEADER));
+
+    hi->r_len = 0;
+    hi->header_end = 0;
+
+    while(1)
+    {
+        ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
+        if(ret == MBEDTLS_ERR_SSL_WANT_READ) continue;
+        else if(ret < 0)
+        {
+            https_close(hi);
+            _error = ret;
+
+            return -1;
+        }
+        else if(ret == 0)
+        {
+            https_close(hi);
+            break;
+        }
+
+        hi->r_len += ret;
+        hi->r_buf[hi->r_len] = 0;
+
+//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
+//        printf("read(%ld) \n", hi->r_len);
+
+        if(http_parse(hi) != 0) break;
+    }
+
+
+
+}
+
+/*---------------------------------------------------------------------*/
 int http_read_chunked(HTTP_INFO *hi, char *response, int size)
 {
     int ret;
@@ -1245,7 +1298,7 @@ int http_read_chunked(HTTP_INFO *hi, char *response, int size)
         if(http_parse(hi) != 0) break;
     }
 
-    if(hi->response.close == 1)
+    if(hi->response.close == TRUE)
     {
         https_close(hi);
     }

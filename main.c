@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 
     snprintf(hi1.request.method, 8, "POST");
     hi1.request.close = FALSE;
-    hi1.request.chunked = FALSE;
+    hi1.request.chunked = TRUE;
     snprintf(hi1.request.content_type, 256, "multipart/form-data; boundary=1234567890abcdef");
 
     size = sprintf(data,

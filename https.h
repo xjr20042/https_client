@@ -14,7 +14,7 @@
 
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
-#define H_READ_SIZE     2048
+#define H_READ_SIZE     4096
 
 #undef TRUE
 #undef FALSE
@@ -26,16 +26,16 @@ typedef unsigned char BOOL;
 
 typedef struct
 {
-    char method[8];
-    int  status;
-    char content_type[H_FIELD_SIZE];
-    long content_length;
-    BOOL chunked;
-    BOOL close;
-    char location[H_FIELD_SIZE];
-    char referrer[H_FIELD_SIZE];
-    char cookie[H_FIELD_SIZE];
-    char boundary[H_FIELD_SIZE];
+    char    method[8];
+    int     status;
+    char    content_type[H_FIELD_SIZE];
+    long    content_length;
+    BOOL    chunked;
+    BOOL    close;
+    char    location[H_FIELD_SIZE];
+    char    referrer[H_FIELD_SIZE];
+    char    cookie[H_FIELD_SIZE];
+    char    boundary[H_FIELD_SIZE];
 
 } HTTP_HEADER;
 
@@ -77,7 +77,6 @@ typedef struct
     long        body_size;
     long        body_len;
 
-
 } HTTP_INFO;
 
 
@@ -95,6 +94,7 @@ int  http_open(HTTP_INFO *hi, char *url);
 int  http_write_header(HTTP_INFO *hi);
 int  http_write(HTTP_INFO *hi, char *data, int len);
 int  http_write_end(HTTP_INFO *hi);
+int  http_read_hader(HTTP_INFO *hi);
 int  http_read_chunked(HTTP_INFO *hi, char *response, int size);
 
 #endif //HTTPS_CLIENT_HTTPS_H
