@@ -49,13 +49,14 @@ int main(int argc, char *argv[])
 
     size = sprintf(data,
                    "--1234567890abcdef\r\n"
-                   "Content-Disposition: form-data; name=\"upload\"; filename=\"test.txt\"\r\n"
-                   "Content-Type: text/plain\r\n\r\n"
-                   "test message\r\n"
-                   "--1234567890abcdef--\r\n"
-                   );
+                           "Content-Disposition: form-data; name=\"upload\"; filename=\"test.txt\"\r\n"
+                           "Content-Type: text/plain\r\n\r\n"
+                           "test message\r\n"
+                           "--1234567890abcdef--\r\n"
+    );
 
     hi1.request.content_length = size;
+
 
     if(http_write_header(&hi1) < 0)
     {

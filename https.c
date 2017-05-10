@@ -212,13 +212,16 @@ static int http_parse(HTTP_INFO *hi)
                 {
                     hi->header_end = TRUE; // reach the header-end.
 
-                    // printf("header_end .... \n");
+                    printf("header_end .... \n");
 
                     p1 = p2 + 2;    // skip CR+LF
 
                     if(hi->response.chunked == TRUE)
                     {
                         len = hi->r_len - (p1 - hi->r_buf);
+
+                        printf("len: %d, |%s| \n", len, p1);
+
                         if(len > 0)
                         {
                             if((p2 = strstr(p1, "\r\n")) != NULL)
@@ -1214,7 +1217,7 @@ int  http_read_hader(HTTP_INFO *hi)
 
     if (NULL == hi) return -1;
 
-    memset(hi->response, 0, sizeof(HTTP_HEADER));
+    memset(&hi->response, 0, sizeof(HTTP_HEADER));
 
     hi->r_len = 0;
     hi->header_end = 0;
@@ -1245,8 +1248,7 @@ int  http_read_hader(HTTP_INFO *hi)
         if(http_parse(hi) != 0) break;
     }
 
-
-
+    return ret;
 }
 
 /*---------------------------------------------------------------------*/
