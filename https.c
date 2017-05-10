@@ -21,7 +21,8 @@ static int _error;
 char *strtoken(char *src, char *dst, int size);
 
 static int parse_url(char *src_url, int *https, char *host, char *port, char *url);
-static int http_header(HTTP_INFO *hi, char *param);
+static int http_header_field(HTTP_INFO *hi, char *param);
+static int http_header_parse(HTTP_INFO *hi);
 static int http_parse(HTTP_INFO *hi);
 
 static int https_init(HTTP_INFO *hi, BOOL https, BOOL verify);
@@ -126,7 +127,7 @@ static int parse_url(char *src_url, int *https, char *host, char *port, char *ur
 }
 
 /*---------------------------------------------------------------------*/
-static int http_header(HTTP_INFO *hi, char *param)
+static int http_header_field(HTTP_INFO *hi, char *param)
 {
     char *token;
     char t1[256], t2[256];
@@ -182,6 +183,108 @@ static int http_header(HTTP_INFO *hi, char *param)
 }
 
 /*---------------------------------------------------------------------*/
+static int http_header_parse(HTTP_INFO *hi)
+{
+    char *p1, *p2;
+    long len;
+
+    if(hi->r_len <= 0) return -1;
+
+    p1 = hi->r_buf;
+
+    while(1)
+    {
+        if((p2 = strstr(p1, "\r\n")) != NULL)
+        {
+            len = (long)(p2 - p1);
+            *p2 = 0;
+
+            if(len > 0)
+            {
+                printf("header: %s(%ld)\n", p1, len);
+
+                http_header_field(hi, p1);
+                p1 = p2 + 2;    // skip CR+LF
+            }
+            else
+            {
+                hi->header_end = TRUE; // reach the header-end.
+
+                printf("header_end .... \n");
+
+                p1 = p2 + 2;    // skip CR+LF
+
+                if(hi->response.chunked == TRUE)
+                {
+                    len = hi->r_len - (p1 - hi->r_buf);
+
+                    printf("len: %d, |%s| \n", len, p1);
+
+                    if(len > 0)
+                    {
+                        if((p2 = strstr(p1, "\r\n")) != NULL)
+                        {
+                            *p2 = 0;
+
+                            if((hi->length = strtol(p1, NULL, 16)) == 0)
+                            {
+                                hi->response.chunked = FALSE;
+                            }
+                            else
+                            {
+                                hi->response.content_length += hi->length;
+                            }
+                            p1 = p2 + 2;    // skip CR+LF
+                        }
+                        else
+                        {
+                            // copy the data as chunked size ...
+                            strncpy(hi->r_buf, p1, len);
+                            hi->r_buf[len] = 0;
+                            hi->r_len = len;
+                            hi->length = -1;
+
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        hi->r_len = 0;
+                        hi->length = -1;
+
+                        break;
+                    }
+                }
+                else
+                {
+                    hi->length = hi->response.content_length;
+                }
+            }
+
+        }
+        else
+        {
+            len = hi->r_len - (p1 - hi->r_buf);
+            if (len > 0)
+            {
+                // keep the partial header data ...
+                memcpy(hi->r_buf, p1, len);
+                hi->r_buf[len] = 0;
+                hi->r_len = len;
+            }
+            else
+            {
+                hi->r_len = 0;
+            }
+
+            break;
+        }
+    }
+
+    return 0;
+}
+
+/*---------------------------------------------------------------------*/
 static int http_parse(HTTP_INFO *hi)
 {
     char    *p1, *p2;
@@ -203,16 +306,14 @@ static int http_parse(HTTP_INFO *hi)
 
                 if(len > 0)
                 {
-                    printf("header: %s(%ld)\n", p1, len);
-
-                    http_header(hi, p1);
+                    http_header_field(hi, p1);
                     p1 = p2 + 2;    // skip CR+LF
                 }
                 else
                 {
                     hi->header_end = TRUE; // reach the header-end.
 
-                    printf("header_end .... \n");
+//                    printf("header_end .... \n");
 
                     p1 = p2 + 2;    // skip CR+LF
 
