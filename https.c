@@ -218,8 +218,6 @@ static int http_header_parse(HTTP_INFO *hi)
                 {
                     len = hi->r_len - (p1 - hi->r_buf);
 
-                    printf("len: %d, |%s| \n", len, p1);
-
                     if(len > 0)
                     {
                         if((p2 = strstr(p1, "\r\n")) != NULL)
