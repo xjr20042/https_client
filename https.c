@@ -133,10 +133,13 @@ static int http_header_field(HTTP_INFO *hi, char *param)
     char t1[256], t2[256];
     int  len;
 
+
+    printf("header: %s \n", param);
+
     token = param;
 
     if((token=strtoken(token, t1, 256)) == 0) return -1;
-    if((token=strtoken(token, t2, 256)) == 0) return -1;
+    if(strtoken(token, t2, 256) == 0) return -1;
 
     if(strncasecmp(t1, "HTTP", 4) == 0)
     {
@@ -201,8 +204,6 @@ static int http_header_parse(HTTP_INFO *hi)
 
             if(len > 0)
             {
-                printf("header: %s(%ld)\n", p1, len);
-
                 http_header_field(hi, p1);
                 p1 = p2 + 2;    // skip CR+LF
             }
@@ -212,53 +213,28 @@ static int http_header_parse(HTTP_INFO *hi)
 
                 printf("header_end .... \n");
 
+
+
+
+
                 p1 = p2 + 2;    // skip CR+LF
 
-                if(hi->response.chunked == TRUE)
+                len = hi->r_len - (p1 - hi->r_buf);
+
+                if (len > 0)
                 {
-                    len = hi->r_len - (p1 - hi->r_buf);
-
-                    if(len > 0)
-                    {
-                        if((p2 = strstr(p1, "\r\n")) != NULL)
-                        {
-                            *p2 = 0;
-
-                            if((hi->length = strtol(p1, NULL, 16)) == 0)
-                            {
-                                hi->response.chunked = FALSE;
-                            }
-                            else
-                            {
-                                hi->response.content_length += hi->length;
-                            }
-                            p1 = p2 + 2;    // skip CR+LF
-                        }
-                        else
-                        {
-                            // copy the data as chunked size ...
-                            strncpy(hi->r_buf, p1, len);
-                            hi->r_buf[len] = 0;
-                            hi->r_len = len;
-                            hi->length = -1;
-
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        hi->r_len = 0;
-                        hi->length = -1;
-
-                        break;
-                    }
+                    // copy the data as chunked size ...
+                    strncpy(hi->r_buf, p1, len);
+                    hi->r_buf[len] = 0;
+                    hi->r_len = len;
                 }
                 else
                 {
-                    hi->length = hi->response.content_length;
+                    hi->r_len = 0;
                 }
-            }
 
+                return 1;
+            }
         }
         else
         {
@@ -318,8 +294,6 @@ static int http_parse(HTTP_INFO *hi)
                     if(hi->response.chunked == TRUE)
                     {
                         len = hi->r_len - (p1 - hi->r_buf);
-
-                        printf("len: %d, |%s| \n", len, p1);
 
                         if(len > 0)
                         {
@@ -1344,7 +1318,7 @@ int  http_read_hader(HTTP_INFO *hi)
 //        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
 //        printf("read(%ld) \n", hi->r_len);
 
-        if(http_parse(hi) != 0) break;
+        if(http_header_parse(hi) != 0) break;
     }
 
     return ret;

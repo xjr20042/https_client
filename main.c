@@ -83,7 +83,16 @@ int main(int argc, char *argv[])
         goto error;
     }
 
-    ret = http_read_chunked(&hi1, response, sizeof(response));
+
+    if(http_read_hader(&hi1) < 0)
+    {
+        http_strerror(data, 1024);
+        printf("socket error: %s \n", data);
+
+        goto error;
+    }
+
+//    ret = http_read_chunked(&hi1, response, sizeof(response));
 
     printf("return code: %d \n", ret);
     printf("return body: %s \n", response);
