@@ -95,8 +95,8 @@ int  http_open(HTTP_INFO *hi, char *url);
 int  http_write_header(HTTP_INFO *hi);
 int  http_write(HTTP_INFO *hi, char *data, int len);
 int  http_write_end(HTTP_INFO *hi);
-int  http_read_hader(HTTP_INFO *hi);
-int  http_read_chunked(HTTP_INFO *hi, char *response, int size);
+int  http_read_init(HTTP_INFO *hi);
+int  http_read(HTTP_INFO *hi, char *response, int size);
 
 #endif //HTTPS_CLIENT_HTTPS_H
 
