@@ -16,6 +16,12 @@ int main(int argc, char *argv[])
     http_init(&hi1, FALSE);
     http_init(&hi2, TRUE);
 
+
+    http_get(&hi1, "https://www.google.co.kr", response, 4096);
+
+//    printf("%s", response);
+
+
 /*
     url = "https://localhost:8080/upload";
     sprintf(data,
@@ -32,6 +38,7 @@ int main(int argc, char *argv[])
     printf("return body: %s \n", response);
 */
 
+/*
     url = "https://localhost:8080/upload";
 
     if(http_open(&hi1, url) < 0)
@@ -83,20 +90,14 @@ int main(int argc, char *argv[])
         goto error;
     }
 
+    http_read_init(&hi1);
 
-    if(http_read_hader(&hi1) < 0)
-    {
-        http_strerror(data, 1024);
-        printf("socket error: %s \n", data);
-
-        goto error;
-    }
-
-//    ret = http_read_chunked(&hi1, response, sizeof(response));
+    ret = http_read(&hi1, response, sizeof(response));
 
     printf("return code: %d \n", ret);
     printf("return body: %s \n", response);
 
+*/
 
 /*
     // Test a http get method.

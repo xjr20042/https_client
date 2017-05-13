@@ -31,7 +31,7 @@ typedef struct
     char    content_type[H_FIELD_SIZE];
     long    content_length;
     BOOL    chunked;
-    long    chunk_length;
+    long    chunked_size;
     BOOL    close;
     char    location[H_FIELD_SIZE];
     char    referrer[H_FIELD_SIZE];
