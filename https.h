@@ -19,8 +19,12 @@
 #undef TRUE
 #undef FALSE
 
-#define TRUE    1
-#define FALSE   0
+#define TRUE                1
+#define FALSE               0
+
+#define HTTP_PARSE_HEADER   1
+#define HTTP_PARSE_BODY     2
+#define HTTP_PARSE_END      3
 
 typedef unsigned char BOOL;
 
@@ -31,7 +35,6 @@ typedef struct
     char    content_type[H_FIELD_SIZE];
     long    content_length;
     BOOL    chunked;
-    long    chunked_size;
     BOOL    close;
     char    location[H_FIELD_SIZE];
     char    referrer[H_FIELD_SIZE];
@@ -70,10 +73,10 @@ typedef struct
     HTTP_HEADER response;
     HTTP_SSL    tls;
 
-    long        length;
+    int         status;
     char        r_buf[H_READ_SIZE];
     long        r_len;
-    BOOL        header_end;
+    long        remain_size;
     char        *body;
     long        body_size;
     long        body_len;

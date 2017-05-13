@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     http_init(&hi2, TRUE);
 
 
-    http_get(&hi1, "https://www.google.co.kr", response, 4096);
+    http_get(&hi1, argv[1], response, 4096);
 
 //    printf("%s", response);
 
