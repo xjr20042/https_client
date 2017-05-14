@@ -14,7 +14,7 @@
 
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
-#define H_READ_SIZE     4096
+#define H_READ_SIZE     8192
 
 #undef TRUE
 #undef FALSE
@@ -77,6 +77,7 @@ typedef struct
     char        r_buf[H_READ_SIZE];
     long        r_len;
     long        remain_size;
+
     char        *body;
     long        body_size;
     long        body_len;
