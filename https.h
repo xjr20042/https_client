@@ -14,7 +14,7 @@
 
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
-#define H_READ_SIZE     8192
+#define H_READ_SIZE     4096
 
 #undef TRUE
 #undef FALSE
@@ -24,7 +24,9 @@
 
 #define HTTP_PARSE_HEADER   1
 #define HTTP_PARSE_BODY     2
-#define HTTP_PARSE_END      3
+#define HTTP_PARSE_CONT     3
+#define HTTP_PARSE_END      4
+
 
 typedef unsigned char BOOL;
 
@@ -78,8 +80,7 @@ typedef struct
     long        r_len;
     long        remain_size;
 
-    char        *body;
-    long        body_size;
+    char        body[H_READ_SIZE];
     long        body_len;
 
 } HTTP_INFO;

@@ -239,9 +239,9 @@ static int http_parse(HTTP_INFO *hi)
                                     hi->status = HTTP_PARSE_END;
                                     hi->remain_size = 0;
 
-                                    printf("header: end chunked. content-length: %ld \n", hi->response.content_length);
+                                    printf("header: end of body0: content-length: %ld \n", hi->response.content_length);
 
-                                    break;
+                                    return 1;
                                 }
 
                                 p1 = p2 + 2;    // skip CR+LF
@@ -295,154 +295,174 @@ static int http_parse(HTTP_INFO *hi)
         }
         else if(HTTP_PARSE_BODY == hi->status)   // body parser ...
         {
-
-            if(TRUE == hi->response.chunked && hi->remain_size == -1)
+            if(-1 == hi->remain_size)
             {
-                len = hi->r_len - (p1 - hi->r_buf);
-
-                if(len > 0)
+                if(TRUE == hi->response.chunked)
                 {
-                    if ((p2 = strstr(p1, "\r\n")) != NULL)
+                    len = hi->r_len - (p1 - hi->r_buf);
+
+                    if (len > 0)
                     {
-                        *p2 = 0;
-
-                        if((chunk_size = strtol(p1, NULL, 16)) > 0)
+                        if ((p2 = strstr(p1, "\r\n")) != NULL)
                         {
-                            hi->response.content_length += chunk_size;
-                            hi->remain_size = chunk_size;
+                            *p2 = 0;
 
-                            printf("body: chunked. chunked_size: %ld, len: %ld \n", chunk_size, len);
+                            if ((chunk_size = strtol(p1, NULL, 16)) > 0)
+                            {
+                                hi->response.content_length += chunk_size;
+                                hi->remain_size = chunk_size;
+
+                                printf("body: chunked. chunked_size: %ld, len: %ld \n", chunk_size, len);
+                            }
+                            else
+                            {
+                                hi->status = HTTP_PARSE_END;
+                                hi->remain_size = 0;
+
+                                printf("body: end of body1. content-length: %ld \n", hi->response.content_length);
+
+                                return 1;
+                            }
+
+                            p1 = p2 + 2;    // skip CR+LF
                         }
                         else
                         {
-                            hi->status = HTTP_PARSE_END;
-                            hi->remain_size = 0;
+                            // copy the remain data as chunked size ...
+                            memcpy(hi->r_buf, p1, len);
+                            hi->r_buf[len] = 0;
+                            hi->r_len = len;
 
-                            printf("body: end chunked. content-length: %ld \n", hi->response.content_length);
+                            hi->remain_size = -1;
 
                             break;
                         }
-
-                        p1 = p2 + 2;    // skip CR+LF
                     }
                     else
                     {
-                        // copy the remain data as chunked size ...
-                        memcpy(hi->r_buf, p1, len);
-                        hi->r_buf[len] = 0;
-                        hi->r_len = len;
-                        hi->remain_size = -1;
+                        hi->r_len = 0;
 
                         break;
                     }
                 }
+            }
+            else if(0 < hi->remain_size)
+            {
+                len = hi->r_len - (p1 - hi->r_buf);
+
+//                    printf("body: len: %ld, %s \n", len, p1);
+                printf("body: len: %ld \n", len);
+
+                if(hi->remain_size < len)
+                {
+                    memcpy(&hi->body, p1, hi->remain_size);
+                    hi->body_len = hi->remain_size;
+                    hi->body[hi->body_len] = 0;
+
+                    p1 += hi->remain_size;
+                    len -= hi->remain_size;
+
+                    if(TRUE == hi->response.chunked)
+                    {
+                        if(len > 7)
+                        {
+                            // copy the remain data as chunked size ...
+                            memcpy(hi->r_buf, p1, len);
+                            hi->r_buf[len] = 0;
+                            hi->r_len = len;
+
+                            hi->remain_size = -1;
+
+                            printf("body: remain size: size: %ld \n", len);
+
+                            break;
+                        }
+                        else
+                        {
+                            hi->r_len = 0;
+                            hi->remain_size = -1;
+
+                            if(len == 7 && strncmp(p1, "\r\n0\r\n\r\n", 7) == 0)
+                            {
+                                hi->status = HTTP_PARSE_END;
+                                printf("body: end of body2. content-length: %ld \n", hi->response.content_length);
+
+                                return 1;
+                            }
+                            else if(len == 2 && strncmp(p1, "\r\n", 2) == 0)
+                            {
+                                printf("body: chunked end. skip CR+LF. \n");
+                            }
+                            else
+                            {
+                                printf("body: chunked end but CR+LF not contained. \n");
+                            }
+
+                            break;
+                        }
+
+                    }
+                    else
+                    {
+                        printf("body: content-length is invalid. \n");
+
+                        return -1;
+                    }
+                }
                 else
                 {
+                    printf("body: remain_size(%ld) >= len: %ld.\n", hi->remain_size, len);
+
+                    // copy the data for response ..
+                    memcpy(&hi->body, p1, len);
+                    hi->body[len] = 0;
+                    hi->body_len = len;
+
+                    hi->remain_size -= len;
                     hi->r_len = 0;
+
+                    if(FALSE == hi->response.chunked && hi->remain_size == 0)
+                    {
+                        hi->status = HTTP_PARSE_END;
+                        printf("body: end of body3. content-length: %ld \n", hi->response.content_length);
+
+                        return 1;
+                    }
 
                     break;
                 }
             }
             else
             {
-                if(hi->remain_size > 0)
+                if(TRUE == hi->response.chunked)
                 {
-                    len = hi->r_len - (p1 - hi->r_buf);
+                    printf("body: remain_size is zero. chunked end. skip CR+LF. \n");
 
-
-//                    printf("body: len: %ld, %s \n", len, p1);
-                    printf("body: len: %ld \n", len);
-
-
-                    if(len > hi->remain_size)
+                    // chunked size check ..
+                    if ((hi->r_len > 2) && (memcmp(p1, "\r\n", 2) == 0))
                     {
-                        // copy the data for response ..
-                        if(hi->body_len < hi->body_size-1)
-                        {
-                            if (hi->body_size > (hi->body_len + hi->remain_size))
-                            {
-                                memcpy(&(hi->body[hi->body_len]), p1, hi->remain_size);
-                                hi->body_len += hi->remain_size;
-                                hi->body[hi->body_len] = 0;
-                            }
-                            else
-                            {
-                                memcpy(&(hi->body[hi->body_len]), p1, hi->body_size - hi->body_len - 1);
-                                hi->body_len = hi->body_size - 1;
-                                hi->body[hi->body_len] = 0;
-                            }
-                        }
-
-                        p1 += hi->remain_size;
-                        len -= hi->remain_size;
-
-                        if(hi->response.chunked == TRUE && len >= 2)
-                        {
-                            p1 += 2;    // skip CR+LF
-                            hi->remain_size = -1;
-                        }
-                        else
-                        {
-                            return -1;
-                        }
+                        p1 += 2;
+                        hi->remain_size = -1;
                     }
                     else
                     {
-                        // copy the data for response ..
-                        if(hi->body_len < hi->body_size-1)
-                        {
-                            if (hi->body_size > (hi->body_len + len))
-                            {
-                                memcpy(&(hi->body[hi->body_len]), p1, len);
-                                hi->body_len += len;
-                                hi->body[hi->body_len] = 0;
-                            }
-                            else
-                            {
-                                memcpy(&(hi->body[hi->body_len]), p1, hi->body_size - hi->body_len - 1);
-                                hi->body_len = hi->body_size - 1;
-                                hi->body[hi->body_len] = 0;
-                            }
-                        }
-
-                        hi->remain_size -= len;
+                        hi->remain_size = -1;
                         hi->r_len = 0;
-
-                        if(FALSE == hi->response.chunked && hi->remain_size <= 0) return 1;
-
-                        break;
                     }
                 }
                 else
                 {
+                    len = hi->r_len - (p1 - hi->r_buf);
 
-                    if(TRUE == hi->response.chunked)
-                    {
-                        // chunked size check ..
-                        if ((hi->r_len > 2) && (memcmp(p1, "\r\n", 2) == 0))
-                        {
-                            p1 += 2;
-                            hi->remain_size = -1;
-                        }
-                        else
-                        {
-                            hi->remain_size = -1;
-                            hi->r_len = 0;
-                        }
-                    }
-                    else
-                    {
-                        len = hi->r_len - (p1 - hi->r_buf);
+                    printf("length is zero. r_len: %ld, len: %ld \n", hi->r_len, len);
 
-                        printf("length is zero. r_len: %ld, len: %ld \n", hi->r_len, len);
+                    hi->r_len = 0;
 
-                        hi->r_len = 0;
-
-                        break;
-                    }
-
+                    break;
                 }
+
             }
+
         }
     }
 
@@ -818,10 +838,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     http_read_init(hi);
 
-    hi->body = response;
-    hi->body_size = size;
-    hi->body_len = 0;
-
     while(1)
     {
         ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
@@ -965,12 +981,6 @@ int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size)
 //  printf("request: %s \r\n\r\n", request);
 
     http_read_init(hi);
-
-    hi->body = response;
-    hi->body_size = size;
-    hi->body_len = 0;
-
-    hi->body[0] = 0;
 
     while(1)
     {
@@ -1266,10 +1276,6 @@ int http_read(HTTP_INFO *hi, char *response, int size)
     if (NULL == hi) return -1;
 
 //  printf("request: %s \r\n\r\n", request);
-
-    hi->body = response;
-    hi->body_size = size;
-    hi->body_len = 0;
 
     while(1)
     {
