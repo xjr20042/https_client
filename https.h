@@ -22,10 +22,16 @@
 #define TRUE                1
 #define FALSE               0
 
+#define HTTP_PARSE_ERROR   -1
+#define HTTP_PARSE_OK       0
+#define HTTP_NEED_READ      1
+#define HTTP_PARSE_CHUNK    2
+
+#define HTTP_PARSE_CONT     1
+#define HTTP_PARSE_END      2
+
 #define HTTP_PARSE_HEADER   1
 #define HTTP_PARSE_BODY     2
-#define HTTP_PARSE_CONT     3
-#define HTTP_PARSE_END      4
 
 
 typedef unsigned char BOOL;
@@ -77,7 +83,9 @@ typedef struct
 
     int         status;
     char        r_buf[H_READ_SIZE];
+    char        *r_ptr;
     long        r_len;
+    long        chunk_size;
     long        remain_size;
 
     char        body[H_READ_SIZE];
