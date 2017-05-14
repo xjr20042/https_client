@@ -862,7 +862,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         hi->r_buf[hi->r_len] = 0;
 
 //         printf("read(%ld): |%s| \n", hi->r_len, hi->r_buf);
-//         printf("read(%ld) ... \n", hi->r_len);
+        printf("read: r_len: %ld, ret: %ld ... \n", hi->r_len, ret);
 
         if(http_parse(hi) != 0 || hi->status == HTTP_PARSE_END) break;
     }
