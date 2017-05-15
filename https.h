@@ -14,7 +14,7 @@
 
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
-#define H_READ_SIZE     4096
+#define H_READ_SIZE     8192
 
 #undef TRUE
 #undef FALSE
@@ -81,14 +81,16 @@ typedef struct
     HTTP_HEADER response;
     HTTP_SSL    tls;
 
+    BOOL        init;
     int         status;
     char        r_buf[H_READ_SIZE];
-    char        *r_ptr;
     long        r_len;
     long        chunk_size;
     long        remain_size;
 
-    char        body[H_READ_SIZE];
+//    char        body[H_READ_SIZE];
+    char        *body;
+    long        body_size;
     long        body_len;
 
 } HTTP_INFO;

@@ -17,6 +17,8 @@ int main(int argc, char *argv[])
     http_init(&hi2, TRUE);
 
 
+//    url = "https://wavegw.clova.ai/rswave/tts/1.6.5_23803-dcbee999d8a7452dde1e69d38aaceb31-1494844985383?tid=14dee084f5905f9c8f628cbd052ec529&hash=29581ae85d777e16445dbeda175c4fa4c344d437c79e5991ec5832557be3a805";
+
     http_get(&hi1, argv[1], response, 4096);
 
 //    printf("%s", response);
