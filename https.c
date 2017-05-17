@@ -193,13 +193,13 @@ static int http_parse(HTTP_INFO *hi)
     long    len;
 
 
-    if(hi->r_len <= 0) return -1;
+    if(hi->r_len <= 0) return HTTP_PARSE_ERROR;
 
-    p1 = hi->r_buf;
+    p1 = hi->r_ptr;
 
     while(1)
     {
-        if(HTTP_PARSE_HEADER == hi->status)     // header parser
+        if(HTTP_STATUS_HEADER == hi->status)     // header parser
         {
             if((p2 = strstr(p1, "\r\n")) != NULL)
             {
@@ -213,7 +213,7 @@ static int http_parse(HTTP_INFO *hi)
                 }
                 else
                 {
-                    hi->status = HTTP_PARSE_BODY; // reach the header-end.
+                    hi->status = HTTP_STATUS_BODY; // reach the header-end.
 
 //                    printf("header_end .... \n");
 
@@ -243,7 +243,7 @@ static int http_parse(HTTP_INFO *hi)
 
                                     printf("header: end of body0: content-length: %ld \n", hi->response.content_length);
 
-                                    break;
+                                    return HTTP_PARSE_END;
                                 }
 
                                 p1 = p2 + 2;    // skip CR+LF
@@ -258,7 +258,7 @@ static int http_parse(HTTP_INFO *hi)
 
                                 printf("header: copy the body: len: %ld \n", len);
 
-                                break;
+                                return HTTP_PARSE_OK;
                             }
                         }
                         else
@@ -266,7 +266,7 @@ static int http_parse(HTTP_INFO *hi)
                             hi->r_len = 0;
                             hi->remain_size = -1;
 
-                            break;
+                            return HTTP_PARSE_OK;
                         }
                     }
                     else
@@ -292,10 +292,10 @@ static int http_parse(HTTP_INFO *hi)
                     hi->r_len = 0;
                 }
 
-                break;
+                return HTTP_PARSE_OK;
             }
         }
-        else if(HTTP_PARSE_BODY == hi->status)   // body parser ...
+        else if(HTTP_STATUS_BODY == hi->status)   // body parser ...
         {
 
             if(TRUE == hi->response.chunked && hi->remain_size == -1)
@@ -328,7 +328,7 @@ static int http_parse(HTTP_INFO *hi)
 
                             printf("body: end of body content-length: %ld, len: %ld \n", hi->response.content_length, len);
 
-                            return 1;
+                            return HTTP_PARSE_END;
                         }
                     }
                     else
@@ -339,14 +339,14 @@ static int http_parse(HTTP_INFO *hi)
                         hi->r_len = len;
                         hi->remain_size = -1;
 
-                        break;
+                        return HTTP_PARSE_OK;
                     }
                 }
                 else
                 {
                     hi->r_len = 0;
 
-                    break;
+                    return HTTP_PARSE_OK;
                 }
             }
             else
@@ -365,7 +365,10 @@ static int http_parse(HTTP_INFO *hi)
 
                         printf("================== write1: %ld \n", hi->remain_size);
 
-                        write(fd, p1, hi->remain_size);
+                        hi->body = p1;
+                        hi->body_len = hi->remain_size;
+
+//                        write(fd, p1, hi->remain_size);
 
                         p1 += hi->remain_size;
                         len -= hi->remain_size;
@@ -381,7 +384,9 @@ static int http_parse(HTTP_INFO *hi)
                         }
                         else
                         {
-                            return -1;
+                            printf("error fail. len: %ld \n", len);
+
+                            return HTTP_PARSE_ERROR;
                         }
                     }
                     else
@@ -389,7 +394,10 @@ static int http_parse(HTTP_INFO *hi)
 
                         printf("================== write2: %ld \n", len);
 
-                        write(fd, p1, len);
+//                        write(fd, p1, len);
+
+                        hi->body = p1;
+                        hi->body_len = len;
 
                         hi->remain_size -= len;
                         hi->r_len = 0;
@@ -398,10 +406,10 @@ static int http_parse(HTTP_INFO *hi)
                         {
                             printf("body: end of body3 content-length: %ld \n", hi->response.content_length);
 
-                            return 1;
+                            return HTTP_PARSE_END;
                         }
 
-                        break;
+                        return HTTP_PARSE_OK;
                     }
                 }
                 else
@@ -420,6 +428,9 @@ static int http_parse(HTTP_INFO *hi)
                             hi->remain_size = -1;
                             hi->r_len = 0;
                         }
+
+                        printf("ddddddddddddd \n");
+
                     }
                     else
                     {
@@ -429,12 +440,15 @@ static int http_parse(HTTP_INFO *hi)
 
                         hi->r_len = 0;
 
-                        break;
+                        return HTTP_PARSE_OK;
                     }
 
                 }
             }
         }
+
+        printf("continue parse .... \n");
+
     }
 
     return 0;
@@ -847,6 +861,8 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         hi->r_len += ret;
         hi->r_buf[hi->r_len] = 0;
 
+        hi->r_ptr = hi->r_buf;
+
 //         printf("read(%ld): |%s| \n", hi->r_len, hi->r_buf);
 //         printf("read(%ld) ... \n", hi->r_len);
 
@@ -1255,8 +1271,9 @@ int  http_read_init(HTTP_INFO *hi)
     hi->response.content_length = 0;
     hi->response.close = 0;
 
+    hi->r_ptr = NULL;
     hi->r_len = 0;
-    hi->status = HTTP_PARSE_HEADER;
+    hi->status = HTTP_STATUS_HEADER;
 
     return 0;
 }
