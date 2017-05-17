@@ -13,25 +13,24 @@
 #include "mbedtls/certs.h"
 
 /*---------------------------------------------------------------------*/
-#define H_FIELD_SIZE     512
-#define H_READ_SIZE     8192
+#define H_FIELD_SIZE          512
+#define H_READ_SIZE          8192
 
 #undef TRUE
 #undef FALSE
 
-#define TRUE                1
-#define FALSE               0
+#define TRUE                    1
+#define FALSE                   0
 
-#define HTTP_PARSE_ERROR   -1
-#define HTTP_PARSE_OK       0
-#define HTTP_NEED_READ      1
-#define HTTP_PARSE_CHUNK    2
+#define HTTP_PARSE_ERROR       -1
+#define HTTP_PARSE_OK           0
+#define HTTP_PARSE_READ         1
+#define HTTP_PARSE_WRITE        2
+#define HTTP_PARSE_CHUNK        3
+#define HTTP_PARSE_END          4
 
-#define HTTP_PARSE_CONT     1
-#define HTTP_PARSE_END      2
-
-#define HTTP_STATUS_HEADER  1
-#define HTTP_STATUS_BODY    2
+#define HTTP_STATUS_HEADER      1
+#define HTTP_STATUS_BODY        2
 
 
 typedef unsigned char BOOL;
