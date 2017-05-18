@@ -135,7 +135,7 @@ static int http_header_field(HTTP_INFO *hi, char *param)
     int  len;
 
 
-    printf("header: %s \n", param);
+//    printf("header: %s \n", param);
 
     token = param;
 
@@ -199,6 +199,8 @@ static int http_parse(HTTP_INFO *hi)
 
     while(1)
     {
+//        printf("************ parse start .... \n");
+
         if(HTTP_STATUS_HEADER == hi->status)     // header parser
         {
             if((p2 = strstr(p1, "\r\n")) != NULL)
@@ -234,19 +236,22 @@ static int http_parse(HTTP_INFO *hi)
                                     hi->response.content_length += hi->chunk_size;
                                     hi->remain_size = hi->chunk_size;
 
-                                    printf("header: chunked. chunked_size: %ld, len: %ld \n", hi->chunk_size, len);
+                                    hi->r_ptr = p2 + 2;    // skip CR+LF
+
+//                                    printf("header: chunked. chunked_size: %ld, len: %ld \n", hi->chunk_size, len);
+
+                                    return HTTP_PARSE_CHUNK;
                                 }
                                 else
                                 {
                                     hi->status = HTTP_PARSE_END;
                                     hi->remain_size = 0;
 
-                                    printf("header: end of body0: content-length: %ld \n", hi->response.content_length);
+//                                    printf("header: end of body0: content-length: %ld \n", hi->response.content_length);
 
                                     return HTTP_PARSE_END;
                                 }
 
-                                p1 = p2 + 2;    // skip CR+LF
                             }
                             else
                             {
@@ -256,9 +261,9 @@ static int http_parse(HTTP_INFO *hi)
                                 hi->r_len = len;
                                 hi->remain_size = -1;
 
-                                printf("header: copy the body: len: %ld \n", len);
+//                                printf("header: copy the body: len: %ld \n", len);
 
-                                return HTTP_PARSE_OK;
+                                return HTTP_PARSE_READ;
                             }
                         }
                         else
@@ -266,7 +271,7 @@ static int http_parse(HTTP_INFO *hi)
                             hi->r_len = 0;
                             hi->remain_size = -1;
 
-                            return HTTP_PARSE_OK;
+                            return HTTP_PARSE_READ;
                         }
                     }
                     else
@@ -292,7 +297,7 @@ static int http_parse(HTTP_INFO *hi)
                     hi->r_len = 0;
                 }
 
-                return HTTP_PARSE_OK;
+                return HTTP_PARSE_READ;
             }
         }
         else if(HTTP_STATUS_BODY == hi->status)   // body parser ...
@@ -313,10 +318,13 @@ static int http_parse(HTTP_INFO *hi)
                             hi->response.content_length += hi->chunk_size;
                             hi->remain_size = hi->chunk_size;
 
-                            p1 = p2 + 2;    // skip CR+LF
+                            hi->r_ptr = p2 + 2;    // skip CR+LF
+
                             len = hi->r_len - (p1 - hi->r_buf);
 
-                            printf("body: chunked. chunked_size: %ld, len: %ld \n", hi->chunk_size, len);
+//                            printf("body: chunked. chunked_size: %ld, len: %ld \n", hi->chunk_size, len);
+
+                            return HTTP_PARSE_CHUNK;
                         }
                         else
                         {
@@ -326,7 +334,7 @@ static int http_parse(HTTP_INFO *hi)
                             p1 = p2 + 2;    // skip CR+LF
                             len = hi->r_len - (p1 - hi->r_buf);
 
-                            printf("body: end of body content-length: %ld, len: %ld \n", hi->response.content_length, len);
+//                            printf("body: end of body content-length: %ld, len: %ld \n", hi->response.content_length, len);
 
                             return HTTP_PARSE_END;
                         }
@@ -339,14 +347,14 @@ static int http_parse(HTTP_INFO *hi)
                         hi->r_len = len;
                         hi->remain_size = -1;
 
-                        return HTTP_PARSE_OK;
+                        return HTTP_PARSE_READ;
                     }
                 }
                 else
                 {
                     hi->r_len = 0;
 
-                    return HTTP_PARSE_OK;
+                    return HTTP_PARSE_READ;
                 }
             }
             else
@@ -355,7 +363,6 @@ static int http_parse(HTTP_INFO *hi)
                 {
                     len = hi->r_len - (p1 - hi->r_buf);
 
-
 //                    printf("body: len: %ld, %s \n", len, p1);
 //                    printf("body: len: %ld \n", len);
 
@@ -363,12 +370,10 @@ static int http_parse(HTTP_INFO *hi)
                     {
                         // copy the data for response ..
 
-                        printf("================== write1: %ld \n", hi->remain_size);
+//                        printf("================== write1: %ld \n", hi->remain_size);
 
                         hi->body = p1;
                         hi->body_len = hi->remain_size;
-
-//                        write(fd, p1, hi->remain_size);
 
                         p1 += hi->remain_size;
                         len -= hi->remain_size;
@@ -378,23 +383,24 @@ static int http_parse(HTTP_INFO *hi)
                             p1 += 2;    // skip CR+LF
                             hi->remain_size = -1;
 
-                            len = hi->r_len - (p1 - hi->r_buf);
+//                            len = hi->r_len - (p1 - hi->r_buf);
+//                            printf("chunked end. len: %ld \n", len);
 
-                            printf("chunked end. len: %ld \n", len);
+                            hi->r_ptr = p1;
+
+                            return HTTP_PARSE_WRITE;
                         }
                         else
                         {
                             printf("error fail. len: %ld \n", len);
 
-                            return HTTP_PARSE_ERROR;
+                            return HTTP_PARSE_WRITE|HTTP_PARSE_ERROR;
                         }
                     }
                     else
                     {
 
-                        printf("================== write2: %ld \n", len);
-
-//                        write(fd, p1, len);
+//                        printf("================== write2: %ld \n", len);
 
                         hi->body = p1;
                         hi->body_len = len;
@@ -404,12 +410,12 @@ static int http_parse(HTTP_INFO *hi)
 
                         if(FALSE == hi->response.chunked && hi->remain_size == 0)
                         {
-                            printf("body: end of body3 content-length: %ld \n", hi->response.content_length);
+//                            printf("body: end of body3 content-length: %ld \n", hi->response.content_length);
 
-                            return HTTP_PARSE_END;
+                            return HTTP_PARSE_WRITE|HTTP_PARSE_END;
                         }
 
-                        return HTTP_PARSE_OK;
+                        return HTTP_PARSE_WRITE|HTTP_PARSE_READ;
                     }
                 }
                 else
@@ -440,18 +446,17 @@ static int http_parse(HTTP_INFO *hi)
 
                         hi->r_len = 0;
 
-                        return HTTP_PARSE_OK;
+                        return HTTP_PARSE_READ;
                     }
 
                 }
             }
         }
 
-        printf("continue parse .... \n");
+//        printf("************ continue parse .... \n");
 
     }
 
-    return 0;
 }
 
 /*---------------------------------------------------------------------*/
@@ -725,14 +730,19 @@ static int https_write(HTTP_INFO *hi, char *buffer, int len)
 /*---------------------------------------------------------------------*/
 static int https_read(HTTP_INFO *hi, char *buffer, int len)
 {
-    if(hi->url.https == 1)
+    int ret;
+
+    while(1)
     {
-        return mbedtls_ssl_read(&hi->tls.ssl, (u_char *)buffer, (size_t)len);
+        if(hi->url.https == 1)
+            ret = mbedtls_ssl_read(&hi->tls.ssl, (u_char *) buffer, (size_t) len);
+        else
+            ret = mbedtls_net_recv_timeout(&hi->tls.ssl_fd, (u_char *)buffer, (size_t)len, 5000);
+
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ) break;
     }
-    else
-    {
-        return mbedtls_net_recv_timeout(&hi->tls.ssl_fd, (u_char *)buffer, (size_t)len, 5000);
-    }
+
+    return ret;
 }
 
 /*---------------------------------------------------------------------*/
@@ -753,7 +763,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
     char        request[2048], err[100];
     char        host[256], port[10], dir[1024];
     int         sock_fd, https, verify;
-    int         ret, opt, len;
+    int         ret, mode, opt, len;
     socklen_t   slen;
 
 
@@ -813,7 +823,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
             dir, host, port, hi->request.cookie);
 
 
-    printf("%s\n", request);
+//    printf("%s\n", request);
 
 
     if((ret = https_write(hi, request, len)) != len)
@@ -836,37 +846,64 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
     hi->body_len = 0;
 
 
-    fd = open("./test.mp3", O_RDWR);
+    fd = open("./test.html", O_CREAT|O_RDWR);
+
+    mode = HTTP_PARSE_READ;
 
     while(1)
     {
-        ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
-        if(ret == MBEDTLS_ERR_SSL_WANT_READ) continue;
-        else if(ret < 0)
+        if((mode & HTTP_PARSE_READ) == HTTP_PARSE_READ)
         {
-            https_close(hi);
 
-            mbedtls_strerror(ret, err, 100);
+            ret = https_read(hi, &hi->r_buf[hi->r_len], (int) (H_READ_SIZE - hi->r_len));
+            if (ret < 0)
+            {
+                https_close(hi);
 
-            snprintf(response, 256, "socket error: %s(%d)", err, ret);
+                mbedtls_strerror(ret, err, 100);
 
-            return -1;
+                snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+                return -1;
+            }
+            else if (ret == 0)
+            {
+                https_close(hi);
+                break;
+            }
+
+            hi->r_len += ret;
+            hi->r_buf[hi->r_len] = 0;
+
+            hi->r_ptr = hi->r_buf;
         }
-        else if(ret == 0)
-        {
-            https_close(hi);
-            break;
-        }
-
-        hi->r_len += ret;
-        hi->r_buf[hi->r_len] = 0;
-
-        hi->r_ptr = hi->r_buf;
 
 //         printf("read(%ld): |%s| \n", hi->r_len, hi->r_buf);
 //         printf("read(%ld) ... \n", hi->r_len);
 
-        if(http_parse(hi) != 0) break;
+        mode = http_parse(hi);
+
+        if((mode & HTTP_PARSE_CHUNK) == HTTP_PARSE_CHUNK)
+        {
+            printf("return: HTTP_PARSE_CHUNK: chunk_size: %ld \n", hi->chunk_size);
+        }
+        else if((mode & HTTP_PARSE_WRITE) == HTTP_PARSE_WRITE)
+        {
+            printf("return: HTTP_PARSE_WRITE: body_len: %ld \n", hi->body_len);
+
+            write(fd, hi->body, hi->body_len);
+
+        }
+        else if((mode & HTTP_PARSE_END) == HTTP_PARSE_END)
+        {
+            printf("return: HTTP_PARSE_END: content_length: %ld \n", hi->response.content_length);
+            break;
+        }
+        else if((mode & HTTP_PARSE_ERROR) == HTTP_PARSE_ERROR)
+        {
+            printf("return: HTTP_PARSE_ERROR \n");
+            break;
+        }
     }
 
     if(hi->response.close == TRUE)

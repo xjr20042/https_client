@@ -22,12 +22,11 @@
 #define TRUE                    1
 #define FALSE                   0
 
-#define HTTP_PARSE_ERROR       -1
-#define HTTP_PARSE_OK           0
-#define HTTP_PARSE_READ         1
-#define HTTP_PARSE_WRITE        2
-#define HTTP_PARSE_CHUNK        3
-#define HTTP_PARSE_END          4
+#define HTTP_PARSE_ERROR        1
+#define HTTP_PARSE_READ         2
+#define HTTP_PARSE_WRITE        4
+#define HTTP_PARSE_CHUNK        8
+#define HTTP_PARSE_END         16
 
 #define HTTP_STATUS_HEADER      1
 #define HTTP_STATUS_BODY        2
