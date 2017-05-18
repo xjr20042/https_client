@@ -88,7 +88,6 @@ typedef struct
     long        remain_size;
 
     char        *body;
-    long        body_size;
     long        body_len;
 
 } HTTP_INFO;
