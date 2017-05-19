@@ -134,6 +134,8 @@ static int http_header_field(HTTP_INFO *hi, char *param)
     int  len;
 
 
+    printf("* header: %s \n", param);
+
     token = param;
 
     if((token=strtoken(token, t1, 256)) == 0) return -1;
@@ -271,7 +273,10 @@ static int http_parse(HTTP_INFO *hi)
                     else
                     {
                         // In HTTP/1.0, Read in content_length size.
-                        hi->remain_size = hi->response.content_length;
+                        if(hi->response.content_length == 0)
+                            hi->remain_size = -1;
+                        else
+                            hi->remain_size = hi->response.content_length;
                     }
                 }
 
@@ -407,9 +412,16 @@ static int http_parse(HTTP_INFO *hi)
                     else
                     {
                         len = hi->r_len - (p1 - hi->r_buf);
+
+                        hi->body = p1;
+                        hi->body_len = len;
+
+                        if(hi->remain_size == -1)
+                            hi->response.content_length += len;
+
                         hi->r_len = 0;
 
-                        return HTTP_PARSE_READ;
+                        return HTTP_PARSE_WRITE|HTTP_PARSE_READ;
                     }
 
                 }
@@ -777,7 +789,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     /* Send HTTP request. */
     len = snprintf(request, 2048,
-            "GET %s HTTP/1.1\r\n"
+            "GET %s HTTP/1.0\r\n"
             "User-Agent: Mozilla/4.0\r\n"
             "Host: %s:%s\r\n"
             "Content-Type: application/json; charset=utf-8\r\n"
@@ -804,7 +816,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     http_read_init(hi);
 
-//    fd = open("./test.html", O_CREAT|O_RDWR);
+    fd = open("./test.html", O_CREAT|O_RDWR);
 
     while(1)
     {
@@ -814,7 +826,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         {
             printf("return: HTTP_PARSE_WRITE: body_len: %ld \n", hi->body_len);
 
-//            write(fd, hi->body, (size_t)hi->body_len);
+            write(fd, hi->body, (size_t)hi->body_len);
         }
 
         if((mode & HTTP_PARSE_READ) == HTTP_PARSE_READ)
@@ -828,10 +840,16 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
                 snprintf(response, 256, "socket error: %s(%d)", err, ret);
 
+                printf("response: %s \n", response);
+                printf("return: content_length: %ld \n", hi->response.content_length);
+
                 return -1;
             }
             else if (ret == 0)
             {
+                printf("closed from server. \n");
+                printf("return: content_length: %ld \n", hi->response.content_length);
+
                 https_close(hi);
                 break;
             }
@@ -868,7 +886,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         strncpy(hi->url.path, dir, strlen(dir));
     }
 
-//    close(fd);
+    close(fd);
 
 /*
     printf("status: %d \n", hi->response.status);
