@@ -134,7 +134,7 @@ static int http_header_field(HTTP_INFO *hi, char *param)
     int  len;
 
 
-    printf("* header: %s \n", param);
+//    printf("* header: %s \n", param);
 
     token = param;
 
@@ -789,7 +789,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     /* Send HTTP request. */
     len = snprintf(request, 2048,
-            "GET %s HTTP/1.0\r\n"
+            "GET %s HTTP/1.1\r\n"
             "User-Agent: Mozilla/4.0\r\n"
             "Host: %s:%s\r\n"
             "Content-Type: application/json; charset=utf-8\r\n"
@@ -888,14 +888,11 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     close(fd);
 
-/*
     printf("status: %d \n", hi->response.status);
     printf("cookie: %s \n", hi->response.cookie);
     printf("location: %s \n", hi->response.location);
     printf("referrer: %s \n", hi->response.referrer);
     printf("length: %ld \n", hi->response.content_length);
-    printf("body: %ld \n", hi->body_len);
-*/
 
     return hi->response.status;
 
