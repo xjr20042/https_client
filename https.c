@@ -739,8 +739,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
     int         ret, mode, opt, len;
     socklen_t   slen;
 
-    int         fd;
-
 
     if(NULL == hi) return -1;
 
@@ -816,8 +814,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
     http_read_init(hi);
 
-    fd = open("./test.html", O_CREAT|O_RDWR);
-
     while(1)
     {
         mode = http_parse(hi);
@@ -825,8 +821,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         if((mode & HTTP_PARSE_WRITE) == HTTP_PARSE_WRITE)
         {
             printf("return: HTTP_PARSE_WRITE: body_len: %ld \n", hi->body_len);
-
-            write(fd, hi->body, (size_t)hi->body_len);
         }
 
         if((mode & HTTP_PARSE_READ) == HTTP_PARSE_READ)
@@ -837,19 +831,12 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
                 https_close(hi);
 
                 mbedtls_strerror(ret, err, 100);
-
                 snprintf(response, 256, "socket error: %s(%d)", err, ret);
-
-                printf("response: %s \n", response);
-                printf("return: content_length: %ld \n", hi->response.content_length);
 
                 return -1;
             }
             else if (ret == 0)
             {
-                printf("closed from server. \n");
-                printf("return: content_length: %ld \n", hi->response.content_length);
-
                 https_close(hi);
                 break;
             }
@@ -870,7 +857,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         }
         else if((mode & HTTP_PARSE_ERROR) == HTTP_PARSE_ERROR)
         {
-            printf("return: HTTP_PARSE_ERROR \n");
+            snprintf(response, 256, "http parse error.");
             break;
         }
     }
@@ -885,8 +872,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         strncpy(hi->url.port, port, strlen(port));
         strncpy(hi->url.path, dir, strlen(dir));
     }
-
-    close(fd);
 
     printf("status: %d \n", hi->response.status);
     printf("cookie: %s \n", hi->response.cookie);
