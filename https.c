@@ -23,7 +23,6 @@ char *strtoken(char *src, char *dst, int size);
 
 static int parse_url(char *src_url, int *https, char *host, char *port, char *url);
 static int http_header_field(HTTP_INFO *hi, char *param);
-static int http_parse(HTTP_INFO *hi);
 
 static int https_init(HTTP_INFO *hi, BOOL https, BOOL verify);
 static int https_close(HTTP_INFO *hi);
@@ -186,7 +185,7 @@ static int http_header_field(HTTP_INFO *hi, char *param)
 }
 
 /*---------------------------------------------------------------------*/
-static int http_parse(HTTP_INFO *hi)
+int http_parse(HTTP_INFO *hi)
 {
     char    *p1, *p2;
     long    len;
@@ -795,10 +794,6 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
             "%s\r\n",
             dir, host, port, hi->request.cookie);
 
-
-//    printf("%s\n", request);
-
-
     if((ret = https_write(hi, request, len)) != len)
     {
         https_close(hi);
@@ -810,9 +805,9 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         return -1;
     }
 
-//  printf("request: %s \r\n\r\n", request);
-
     http_read_init(hi);
+
+    len = 0;
 
     while(1)
     {
@@ -820,7 +815,21 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 
         if((mode & HTTP_PARSE_WRITE) == HTTP_PARSE_WRITE)
         {
-            printf("return: HTTP_PARSE_WRITE: body_len: %ld \n", hi->body_len);
+            if(len < size - 1)
+            {
+                if (len + hi->body_len > size)
+                {
+                    strncpy(&response[len], hi->body, size - len - 1);
+                    len = size - 1;
+                    response[len] = 0;
+                }
+                else
+                {
+                    strncpy(&response[len], hi->body, hi->body_len);
+                    len += hi->body_len;
+                    response[len] = 0;
+                }
+            }
         }
 
         if((mode & HTTP_PARSE_READ) == HTTP_PARSE_READ)
@@ -848,17 +857,17 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
         }
         else if((mode & HTTP_PARSE_CHUNK) == HTTP_PARSE_CHUNK)
         {
-            printf("return: HTTP_PARSE_CHUNK: chunk_size: %ld \n", hi->chunk_size);
+//            printf("return: HTTP_PARSE_CHUNK: chunk_size: %ld \n", hi->chunk_size);
         }
         else if((mode & HTTP_PARSE_END) == HTTP_PARSE_END)
         {
-            printf("return: HTTP_PARSE_END: content_length: %ld \n", hi->response.content_length);
+//            printf("return: HTTP_PARSE_END: content_length: %ld \n", hi->response.content_length);
             break;
         }
         else if((mode & HTTP_PARSE_ERROR) == HTTP_PARSE_ERROR)
         {
             snprintf(response, 256, "http parse error.");
-            break;
+            return -1;
         }
     }
 
@@ -879,7 +888,7 @@ int http_get(HTTP_INFO *hi, char *url, char *response, int size)
     printf("referrer: %s \n", hi->response.referrer);
     printf("length: %ld \n", hi->response.content_length);
 
-    return hi->response.status;
+    return len;
 
 }
 
@@ -889,7 +898,7 @@ int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size)
     char        request[1024], err[100];
     char        host[256], port[10], dir[1024];
     int         sock_fd, https, verify;
-    int         ret, opt, len;
+    int         ret, mode, opt, len;
     socklen_t   slen;
 
 
@@ -974,38 +983,68 @@ int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size)
 
     http_read_init(hi);
 
-    hi->body = response;
-    hi->body_len = 0;
-
-    hi->body[0] = 0;
+    len = 0;
 
     while(1)
     {
-        ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
-        if(ret == MBEDTLS_ERR_SSL_WANT_READ) continue;
-        else if(ret < 0)
+        mode = http_parse(hi);
+
+        if((mode & HTTP_PARSE_WRITE) == HTTP_PARSE_WRITE)
         {
-            https_close(hi);
-
-            mbedtls_strerror(ret, err, 100);
-
-            snprintf(response, 256, "socket error: %s(%d)", err, ret);
-
-            return -1;
+            if(len < size - 1)
+            {
+                if (len + hi->body_len > size)
+                {
+                    strncpy(&response[len], hi->body, size - len - 1);
+                    len = size - 1;
+                    response[len] = 0;
+                }
+                else
+                {
+                    strncpy(&response[len], hi->body, hi->body_len);
+                    len += hi->body_len;
+                    response[len] = 0;
+                }
+            }
         }
-        else if(ret == 0)
+
+        if((mode & HTTP_PARSE_READ) == HTTP_PARSE_READ)
         {
-            https_close(hi);
+            ret = https_read(hi, &hi->r_buf[hi->r_len], (int) (H_READ_SIZE - hi->r_len));
+            if (ret < 0)
+            {
+                https_close(hi);
+
+                mbedtls_strerror(ret, err, 100);
+                snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+                return -1;
+            }
+            else if (ret == 0)
+            {
+                https_close(hi);
+                break;
+            }
+
+            hi->r_len += ret;
+            hi->r_buf[hi->r_len] = 0;
+
+            hi->r_ptr = hi->r_buf;
+        }
+        else if((mode & HTTP_PARSE_CHUNK) == HTTP_PARSE_CHUNK)
+        {
+//            printf("return: HTTP_PARSE_CHUNK: chunk_size: %ld \n", hi->chunk_size);
+        }
+        else if((mode & HTTP_PARSE_END) == HTTP_PARSE_END)
+        {
+//            printf("return: HTTP_PARSE_END: content_length: %ld \n", hi->response.content_length);
             break;
         }
-
-        hi->r_len += ret;
-        hi->r_buf[hi->r_len] = 0;
-
-//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
-//        printf("read(%ld) \n", hi->r_len);
-
-        if(http_parse(hi) != 0) break;
+        else if((mode & HTTP_PARSE_ERROR) == HTTP_PARSE_ERROR)
+        {
+            snprintf(response, 256, "http parse error.");
+            return -1;
+        }
     }
 
     if(hi->response.close == TRUE)
@@ -1028,8 +1067,7 @@ int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size)
     printf("body: %d \n", hi->body_len);
 */
 
-    return hi->response.status;
-
+    return len;
 }
 
 /*---------------------------------------------------------------------*/
@@ -1266,57 +1304,24 @@ int  http_read_init(HTTP_INFO *hi)
 }
 
 /*---------------------------------------------------------------------*/
-int http_read(HTTP_INFO *hi, char *response, int size)
+int http_read(HTTP_INFO *hi)
 {
-    int ret;
-
+    int         ret;
 
     if (NULL == hi) return -1;
 
-//  printf("request: %s \r\n\r\n", request);
-
-    hi->body = response;
-    hi->body_len = 0;
-
-    while(1)
-    {
-        ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
-        if(ret < 0)
-        {
-            https_close(hi);
-            _error = ret;
-
-            return -1;
-        }
-        else if(ret == 0)
-        {
-            https_close(hi);
-            break;
-        }
-
-        hi->r_len += ret;
-        hi->r_buf[hi->r_len] = 0;
-
-//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
-//        printf("read(%ld) \n", hi->r_len);
-
-        if(http_parse(hi) != 0) break;
-    }
-
-    if(hi->response.close == TRUE)
+    ret = https_read(hi, &hi->r_buf[hi->r_len], (int) (H_READ_SIZE - hi->r_len));
+    if (ret <= 0)
     {
         https_close(hi);
+        return ret;
     }
 
-/*
-    printf("status: %d \n", hi->status);
-    printf("cookie: %s \n", hi->cookie);
-    printf("location: %s \n", hi->location);
-    printf("referrer: %s \n", hi->referrer);
-    printf("length: %d \n", hi->content_length);
-    printf("body: %d \n", hi->body_len);
-*/
+    hi->r_len += ret;
+    hi->r_buf[hi->r_len] = 0;
 
-    return hi->response.status;
+    hi->r_ptr = hi->r_buf;
+
+    return ret;
 }
 

@@ -102,13 +102,14 @@ int  http_close(HTTP_INFO *hi);
 int  http_get(HTTP_INFO *hi, char *url, char *response, int size);
 int  http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size);
 
+int  http_parse(HTTP_INFO *hi);
 void http_strerror(char *buf, int len);
 int  http_open(HTTP_INFO *hi, char *url);
 int  http_write_header(HTTP_INFO *hi);
 int  http_write(HTTP_INFO *hi, char *data, int len);
 int  http_write_end(HTTP_INFO *hi);
 int  http_read_init(HTTP_INFO *hi);
-int  http_read(HTTP_INFO *hi, char *response, int size);
+int  http_read(HTTP_INFO *hi);
 
 #endif //HTTPS_CLIENT_HTTPS_H
 
