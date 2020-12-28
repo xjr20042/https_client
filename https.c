@@ -610,7 +610,8 @@ static int https_connect(HTTP_INFO *hi, char *host, char *port)
         }
     }
 
-    ret = mbedtls_net_connect_timeout(&hi->tls.ssl_fd, host, port, MBEDTLS_NET_PROTO_TCP, 5000);
+    ret = mbedtls_net_connect_timeout(&hi->tls.ssl_fd, host, port, MBEDTLS_NET_PROTO_TCP,
+            hi->connect_timeout > 0 ? hi->connect_timeout : 5000);
     if( ret != 0 )
     {
         return ret;
@@ -686,6 +687,11 @@ int http_close(HTTP_INFO *hi)
     return https_close(hi);
 }
 
+void http_settimeout(HTTP_INFO *hi, int connect_timeout, int receive_timeout)
+{
+    hi->connect_timeout = connect_timeout;
+    hi->receive_timeout = receive_timeout;
+}
 /*---------------------------------------------------------------------*/
 int http_get(HTTP_INFO *hi, char *url, char *response, int size)
 {
@@ -905,6 +911,172 @@ int http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size)
             data);
 
     if((ret = https_write(hi, request, len)) != len)
+    {
+        https_close(hi);
+
+        mbedtls_strerror(ret, err, 100);
+
+        snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+        return -1;
+    }
+
+//  printf("request: %s \r\n\r\n", request);
+
+    hi->response.status = 0;
+    hi->response.content_length = 0;
+    hi->response.close = 0;
+
+    hi->r_len = 0;
+    hi->header_end = 0;
+
+    hi->body = response;
+    hi->body_size = size;
+    hi->body_len = 0;
+
+    hi->body[0] = 0;
+
+    while(1)
+    {
+        ret = https_read(hi, &hi->r_buf[hi->r_len], (int)(H_READ_SIZE - hi->r_len));
+        if(ret == MBEDTLS_ERR_SSL_WANT_READ) continue;
+        else if(ret < 0)
+        {
+            https_close(hi);
+
+            mbedtls_strerror(ret, err, 100);
+
+            snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+            return -1;
+        }
+        else if(ret == 0)
+        {
+            https_close(hi);
+            break;
+        }
+
+        hi->r_len += ret;
+        hi->r_buf[hi->r_len] = 0;
+
+//        printf("read(%ld): %s \n", hi->r_len, hi->r_buf);
+//        printf("read(%ld) \n", hi->r_len);
+
+        if(http_parse(hi) != 0) break;
+    }
+
+    if(hi->response.close == 1)
+    {
+        https_close(hi);
+    }
+    else
+    {
+        strncpy(hi->url.host, host, strlen(host));
+        strncpy(hi->url.port, port, strlen(port));
+        strncpy(hi->url.path, dir, strlen(dir));
+    }
+
+/*
+    printf("status: %d \n", hi->response.status);
+    printf("cookie: %s \n", hi->response.cookie);
+    printf("location: %s \n", hi->response.location);
+    printf("referrer: %s \n", hi->response.referrer);
+    printf("length: %d \n", hi->response.content_length);
+    printf("body: %d \n", hi->body_len);
+*/
+
+    return hi->response.status;
+
+}
+int http_post_formdata(HTTP_INFO *hi, char *url, char* boundary, 
+        char *form_data, int data_len, char *response, int size)
+{
+    char        request[1024], err[100];
+    char        host[256], port[10], dir[1024];
+    int         sock_fd, https, verify;
+    int         ret, opt, len;
+    socklen_t   slen;
+
+
+    if(NULL == hi) return -1;
+
+    verify = hi->tls.verify;
+
+    parse_url(url, &https, host, port, dir);
+
+    if( (hi->tls.ssl_fd.fd == -1) || (hi->url.https != https) ||
+        (strcmp(hi->url.host, host) != 0) || (strcmp(hi->url.port, port) != 0) )
+    {
+        if(hi->tls.ssl_fd.fd != -1)
+            https_close(hi);
+
+        https_init(hi, https, verify);
+
+        if((ret=https_connect(hi, host, port)) < 0)
+        {
+            https_close(hi);
+
+            mbedtls_strerror(ret, err, 100);
+            snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+            return -1;
+        }
+    }
+    else
+    {
+        sock_fd = hi->tls.ssl_fd.fd;
+
+        slen = sizeof(int);
+
+        if((getsockopt(sock_fd, SOL_SOCKET, SO_ERROR, (void *)&opt, &slen) < 0) || (opt > 0))
+        {
+            https_close(hi);
+
+            https_init(hi, https, verify);
+
+            if((ret=https_connect(hi, host, port)) < 0)
+            {
+                https_close(hi);
+
+                mbedtls_strerror(ret, err, 100);
+                snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+                return -1;
+            }
+        }
+//      else
+//          printf("socket reuse: %d \n", sock_fd);
+    }
+
+    /* Send HTTP request. */
+    len = snprintf(request, 1024,
+            "POST %s HTTP/1.1\r\n"
+            "User-Agent: Mozilla/4.0\r\n"
+            "Host: %s:%s\r\n"
+            "Connection: Keep-Alive\r\n"
+            "Accept: */*\r\n"
+            "Content-Type: multipart/form-data; boundary=%s\r\n"
+            "Content-Length: %d\r\n"
+            "%s\r\n",
+            //"%s",
+            dir, host, port, boundary,
+            data_len,
+            hi->request.cookie);
+            //form_data);
+
+    printf("%s", request);
+    if((ret = https_write(hi, request, len)) != len)
+    {
+        https_close(hi);
+
+        mbedtls_strerror(ret, err, 100);
+
+        snprintf(response, 256, "socket error: %s(%d)", err, ret);
+
+        return -1;
+    }
+    printf("%s\n", form_data);
+    if((ret = https_write(hi, form_data, data_len)) != data_len)
     {
         https_close(hi);
 

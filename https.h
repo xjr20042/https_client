@@ -6,11 +6,11 @@
 #define HTTPS_CLIENT_HTTPS_H
 
 /*---------------------------------------------------------------------*/
-#include "mbedtls/net.h"
-#include "mbedtls/entropy.h"
-#include "mbedtls/ctr_drbg.h"
-#include "mbedtls/error.h"
-#include "mbedtls/certs.h"
+#include <mbedtls/net.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/error.h>
+#include <mbedtls/certs.h>
 
 /*---------------------------------------------------------------------*/
 #define H_FIELD_SIZE     512
@@ -77,18 +77,27 @@ typedef struct
     long        body_size;
     long        body_len;
 
-
+    //seconds
+    int         connect_timeout;
+    //seconds
+    int         receive_timeout;
 } HTTP_INFO;
 
 
 /*---------------------------------------------------------------------*/
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 char *strtoken(char *src, char *dst, int size);
 
 int  http_init(HTTP_INFO *hi, BOOL verify);
 int  http_close(HTTP_INFO *hi);
+void http_settimeout(HTTP_INFO *hi, int connect_timeout, int receive_timeout);
 int  http_get(HTTP_INFO *hi, char *url, char *response, int size);
 int  http_post(HTTP_INFO *hi, char *url, char *data, char *response, int size);
+int  http_post_formdata(HTTP_INFO *hi, char *url, char* boundary, 
+        char *form_data, int data_len, char *response, int size);
 
 void http_strerror(char *buf, int len);
 int  http_open(HTTP_INFO *hi, char *url);
@@ -96,6 +105,8 @@ int  http_write_header(HTTP_INFO *hi);
 int  http_write(HTTP_INFO *hi, char *data, int len);
 int  http_write_end(HTTP_INFO *hi);
 int  http_read_chunked(HTTP_INFO *hi, char *response, int size);
-
+#ifdef __cplusplus
+}
+#endif
 #endif //HTTPS_CLIENT_HTTPS_H
 
